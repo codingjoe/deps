@@ -89,10 +89,13 @@ usage like so:
 <script src="{{ asset.url }}" integrity="{{ asset.integrity }}"></script>
 {# for backwards compatibility, __str__ defaults to .url #}
 <script src="{{ asset }}" integrity="{{ asset.integrity }}"></script>
+{# 'static' without name assigning remains to function as before #}
+<script src="{% static 'path/to/file.js' %}"></script>
 ```
 
 The `static`-templatetage currently adds a URI-string to the context. That
-string should be replaced with some kind of discrete string-like object, like so:
+string should be replaced with some kind of discrete, backwards compatible,
+string-like object, like so:
 
 ```diff
 diff --git a/django/templatetags/static.py b/django/templatetags/static.py
