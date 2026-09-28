@@ -37,11 +37,12 @@ the `Integrity-Policy` and `Integrity-Policy-Report-Only` headers, analogue to C
 ### Phase 1: Providing integrity digests
 
 The return value is the integrity metadata: one or more items of the form
-`<algorithm>-<base64 digest>`, separated by spaces, weakest first. That string
-is the value of the `integrity` attribute. An algorithm may repeat with a
-different digest when several versions of the file are acceptable. See also: https://www.w3.org/TR/sri/#agility
+`<algorithm>-<base64 digest>`, separated by spaces. That string is the value
+of the `integrity` attribute. An algorithm may repeat with a different digest
+when several versions of the file are acceptable.
+See also: https://www.w3.org/TR/sri/#agility
 
-Django's own storage backends return every algorithm they support, which is
+Django's own storage backends return every algorithm, which currently is
 `sha256`, `sha384` and `sha512`. A third-party storage may return fewer.
 
 #### `Storage.integrity()`
@@ -55,8 +56,10 @@ class Storage:
 
 - `path` resolves like `Storage.url()`, so both `app/js/site.js` and a hashed name
   are valid.
-- An empty string means no metadata. The caller adds no attribute. It is not an
-  error.
+- Raises
+  - `NotImplementedError` if the file can't be digested,
+  - `ValueError` (or specific subclass) if the path does not exist,
+  - `ValueError`  (or specific subclass) if the path is not a file.
 - A storage can precompute the digests while files are collected, or cache them
   after a first call, and neither the signature nor the caller changes.
 
@@ -103,14 +106,12 @@ index a68e44add2..3d97a71b65 100644
 --- a/django/templatetags/static.py
 +++ b/django/templatetags/static.py
 @@ -1,9 +1,11 @@
-+import dataclasses
  from urllib.parse import quote, urljoin
  
  from django import template
  from django.apps import apps
  from django.utils.encoding import iri_to_uri
  from django.utils.html import conditional_escape
-+from logging_tests.views import internal_server_error
  
  register = template.Library()
  
@@ -118,9 +119,8 @@ index a68e44add2..3d97a71b65 100644
      return PrefixNode.handle_token(parser, token, "MEDIA_URL")
  
  
-+@dataclasses.dataclass
-+class StaticFile:
-+    path: str
++class StaticFile(str):
++    __slots__ = ("url", "integrity")
 +
 +    @property
 +    def url(self): ...
@@ -128,8 +128,6 @@ index a68e44add2..3d97a71b65 100644
 +    @property
 +    def integrity(self): ...
 +
-+    def __str__(self) -> str:
-+        return self.url
 +
  class StaticNode(template.Node):
      child_nodelists = ()
