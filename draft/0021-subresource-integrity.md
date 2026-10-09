@@ -48,10 +48,39 @@ Django's own storage backends return every algorithm, which currently is
 #### `Storage.integrity()`
 
 ```python
+import base64
+import enum
+import dataclasses
+
+
+class IntegrityAlgorith(enum.StrEnum):
+    SHA256 = "sha256"
+    SHA384 = "sha384"
+    SHA512 = "sha512"
+    
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class IntegrityMetadata:
+    algorithm: IntegrityAlgorith
+    digest: bytes = dataclasses.field(doc="Hash digest.")
+    
+    def __str__(self):
+        return f"{self.algorithm}-{base64.b64encode(self.digest).decode()}"
+
+    
+class IntegrityMetadataList(list[IntegrityMetadata]):
+    
+    def __str__(self):
+        return " ".join(str(metadata) for metadata in self)
+    
+    def __html__(self):
+        return str(self)
+
+
 class Storage:
-    def integrity(self, path) -> str:
+    def integrity(self, path) -> IntegrityMetadataList:
         """Return 1..N space-separated <algorithm>-<base64-digest> pairs."""
-        raise NotImplementedError("subclasses of Storage must provide a url() method")
+        raise NotImplementedError("Storage backend does not support Subresource Integrity (SRI).")
 ```
 
 - `path` resolves like `Storage.url()`, so both `app/js/site.js` and a hashed name
@@ -67,8 +96,7 @@ class Storage:
 
 ```python
 class FieldFile:
-    def integrity(self) -> str:
-        """Return 1..N space-separated <algorithm>-<base64-digest> pairs."""
+    def integrity(self) -> IntegrityMetadataList:
         return self._storage.integrity(self.name)
 ```
 
@@ -157,15 +185,16 @@ class MediaAsset:
     def render(self, *, attrs=None):
         # integrity calls should only happen during render-time and not
         # during init-time / module loading to prevent slow app startups
-        attributes = flatatt({**(attrs or {}), **self.attributes})
+        attrs = attrs or {}
         try:
-            attributes["integrity"] = self.integrity
+            attrs["integrity"] = self.integrity
         except NotImplementedError:
             pass
+        attributes = flatatt({**(attrs or {}), **self.attributes})
         ...
     
     @property
-    def integrity(self):
+    def integrity(self) -> IntegrityMetadataList:
         if apps.is_installed("django.contrib.staticfiles"):
             from django.contrib.staticfiles.storage import staticfiles_storage
             return staticfiles_storage.integrity(self._path)
